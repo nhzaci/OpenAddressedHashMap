@@ -28,7 +28,7 @@ namespace nhzaci {
  */
 template <typename Key, typename T, typename Hash = std::hash<T>,
           typename KeyEqual = std::equal_to<Key>,
-          typename Allocator = std::allocator<MapNode<const Key, T>>,
+          typename Allocator = std::allocator<MapNode<Key, T>>,
           typename Probe = probe<Key, MapNode<Key, T>, Hash, KeyEqual>>
 class open_addressed_hash_map {
 public:
@@ -80,18 +80,18 @@ public:
   using allocator_type = Allocator;
   using reference = value_type &;
   using const_reference = const value_type &;
-  using alloc_traits_t = std::allocator_traits<Allocator>;
-  using pointer = typename alloc_traits_t::pointer;
-  using const_pointer = typename alloc_traits_t::const_pointer;
+  using traits_t = std::allocator_traits<Allocator>;
+  using pointer = typename traits_t::pointer;
+  using const_pointer = typename traits_t::const_pointer;
   using iterator = Iterator;
   using const_iterator = const Iterator;
   using prober = Probe;
 
-  iterator begin() { return Iterator(&(container_p_[0])); }
-  iterator end() { return Iterator(&(container_p_[max_size_])); }
+  iterator begin() { return Iterator(container_p_); }
+  iterator end() { return Iterator(container_p_ + max_size_); }
 
-  const_iterator begin() const { return Iterator(&(container_p_[0])); }
-  const_iterator end() const { return Iterator(&(container_p_[max_size_])); }
+  const_iterator begin() const { return Iterator(container_p_); }
+  const_iterator end() const { return Iterator(container_p_ + max_size_); }
 
   /////////////////////
   // Special Mem Fns //
@@ -104,7 +104,7 @@ public:
   ~open_addressed_hash_map() {
     if (container_p_ != nullptr) {
       // TODO: Deallocate from alloc instead of delete
-      // alloc_traits_t::deallocate(alloc_, container_p_, max_size_);
+      // traits_t::deallocate(alloc_, container_p_, max_size_);
       delete[] container_p_;
     }
   }
@@ -127,7 +127,8 @@ public:
     other.max_size_ = 0;
   }
   open_addressed_hash_map &operator=(open_addressed_hash_map &&other) {
-    *this(std::move(other));
+    this(std::move(other));
+    return *this;
   }
 
   /////////////////////
@@ -153,7 +154,7 @@ public:
     if (container_p_ == nullptr)
       return;
 
-    // alloc_traits_t::deallocate(alloc_, container_p_, max_size_);
+    // traits_t::deallocate(alloc_, container_p_, max_size_);
     delete[] container_p_;
     container_p_ = nullptr;
     curr_size_ = 0;
@@ -242,10 +243,19 @@ public:
 
     return *container_p_[index].t_p;
   }
-  const T &at(const key_type &key) const { return at(key); }
+  const T &at(const key_type &key) const {
+    size_type index = find_item_index(key);
 
-  T &operator[](const key_type &key) { return *(find(key)->t_p); }
-  T &operator[](key_type &&key) { return *(find(key)->t_p); }
+    if (index == max_size_) {
+      throw std::out_of_range("Key not found in hash map");
+    }
+
+    return *container_p_[index].t_p;
+  }
+
+  T &operator[](const key_type &key) { return find_or_default_construct(key); }
+  // move optimizations
+  T &operator[](key_type &&key) { return find_or_default_construct(key); }
 
   size_type count(const key_type &key) const {
     size_type startIdx = find_item_index(key);
@@ -259,14 +269,11 @@ public:
   template <typename K> size_type count(const K &x) const { return count(x); }
 
   iterator find(const key_type &key) {
-    auto idx = find_item_index(key);
-    return Iterator(&(container_p_[idx]));
+    return Iterator(container_p_ + find_item_index(key));
   }
-
   const_iterator find(const key_type &key) const {
-    return Iterator(&(container_p_[find_item_index(key)]));
+    return Iterator(container_p_ + find_item_index(key));
   }
-
   template <typename K> iterator find(const K &x) { return find(x); }
   template <typename K> const_iterator find(const K &x) const {
     return find(x);
@@ -327,20 +334,20 @@ private:
       max_size_ = 4;
       // TODO: Use the allocator instead of allocating with new
       container_p_ = new value_type[max_size_];
-      // container_p_ = alloc_traits_t::allocate(alloc_, max_size_);
-      // alloc_traits_t::construct(alloc_, container_p_, max_size_);
+      // container_p_ = traits_t::allocate(alloc_, max_size_);
+      // traits_t::construct(alloc_, container_p_, max_size_);
       return;
     }
 
-    if (static_cast<double>(curr_size_ + 1) / max_size_ <= max_load_factor_)
+    if (static_cast<float>(curr_size_ + 1) / max_size_ <= max_load_factor_)
       return;
 
     auto newSize = max_size_ * 2;
-    // auto newContainer = alloc_traits_t::allocate(alloc_, newSize);
+    // auto newContainer = traits_t::allocate(alloc_, newSize);
     auto newContainer = new value_type[newSize];
     rehash_into_new_container(container_p_, max_size_, newContainer, newSize);
     delete[] container_p_;
-    // alloc_traits_t::deallocate(container_p_, max_size_);
+    // traits_t::deallocate(container_p_, max_size_);
 
     container_p_ = newContainer;
     max_size_ = newSize;
@@ -368,6 +375,19 @@ private:
     return probe_fn_.find_item_key(container_p_, max_size_, key, hash_fn_,
                                    key_eq_fn_);
   }
-};
 
+  T &find_or_default_construct(const Key &key) {
+    auto itr = find(key);
+    if (itr != end())
+      return *itr->t_p;
+
+    auto [createdItr, isCreated] = insert(value_type(key));
+    return *(createdItr->t_p);
+  }
+
+  // TODO: Move optimizations
+  T &find_or_default_construct(Key &&key) {
+    return find_or_default_construct(key);
+  }
+};
 }; // namespace nhzaci
