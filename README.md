@@ -2,7 +2,7 @@
 
 Project aims to build a drop-in replacement for std::unordered_map, being an open-addressed hash map built for use in Optiver, where each node contains a key and a pointer to a value, as described in a CppCon 2017 talk by Carl Cook.
 
-[Here's the Medium post]() elaborating more on the motivation and reasoning behind building such a hash map and how it would be more cache-efficient compared to a hash map implemented with chaining.
+[Here's the Medium post](https://medium.com/@nhzaci/writing-drop-in-unordered-map-implementations-c-c2c76a2bf1bc) elaborating more on the motivation and reasoning behind building such a hash map and how it would be more cache-efficient compared to a hash map implemented with chaining.
 
 # Build and Running
 
@@ -34,6 +34,15 @@ cmake --build .
 
 # TODO
 
+- [X] Initial implementation with key features, find, insert, clear
+- [X] Expand the map when it reaches its load factor
+- [X] Benchmark it compared to std::unordered_map
+- [] Profile for memory leaks
+- [] Implementing erase and emplace
+- [] Write concepts for Probe and static_assert in map impl
+- [] Make containers allocator-aware
+- [] Optimizations for rvalue references
+
 | Methods         | Impl? |
 | --------------- | ----- |
 | empty           | Y     |
@@ -56,15 +65,6 @@ cmake --build .
 | reserve         | N     |
 | hash_function   | Y     |
 | key_eq          | Y     |
-
-- [X] Initial implementation with key features, find, insert, clear
-- [X] Expand the map when it reaches its load factor
-- [] Benchmark it compared to std::unordered_map
-- [] Profile for memory leaks
-- [] Implementing erase and emplace
-- [] Write concepts for Probe and static_assert in map impl
-- [] Make containers allocator-aware
-- [] Optimizations for rvalue references
 
 # References:
 
